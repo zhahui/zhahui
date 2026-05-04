@@ -16,10 +16,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
         run: |
-          # Fetch last 5 updated repositories (including private) where you are the owner
-          REPOS=$(gh repo list --limit 5 --source --visibility private,public --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
+          # Fetch last 5 updated repositories (public and private) where you are the owner
+          # Removed the visibility flag to allow all types by default
+          REPOS=$(gh repo list --limit 5 --source --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
           
-          # Print to logs for debugging
           echo "--- DEBUG: Repositories Found ---"
           echo "$REPOS"
           echo "---------------------------------"
