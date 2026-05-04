@@ -1,3 +1,3 @@
 ## 🚀 Recent Projects
-<!-- REPOS_START -->
-<!-- REPOS_END -->
+<!-- [START_REPO_LIST] -->
+<!-- [END_REPO_LIST] -->
