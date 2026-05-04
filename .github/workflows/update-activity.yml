@@ -1,0 +1,17 @@
+name: Update GitHub Activity
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Updates every hour
+  workflow_dispatch: # Allows you to run it manually for testing
+
+jobs:
+  update-readme:
+    name: Update this repo's README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: jamesgeorge007/github-activity-readme@master
+        env:
+          # This calls the specific secret name you created
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
