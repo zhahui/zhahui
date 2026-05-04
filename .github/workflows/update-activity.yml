@@ -8,20 +8,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Get Recent Repos
+      
+      - name: Update README with Repo List
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
         run: |
-          # Use GitHub CLI to get the last 5 updated repos (public and private)
+          # 1. Fetch the data using GitHub CLI
           REPOS=$(gh repo list --limit 5 --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
           
-          # Use sed to inject the list between your anchors
-          sed -i '/<!-- \[START_REPO_LIST\] -->/,/<!-- \[END_REPO_LIST\] -->/{ /<!-- \[START_REPO_LIST\] -->/!{ /<!-- \[END_REPO_LIST\] -->/!d; }; /<!-- \[START_REPO_LIST\] -->/a '"$REPOS"'' README.md
+          # 2. Use Python to safely swap the content between the tags
+          python3 -c "
+          import os
+          repos = os.getenv('REPOS', 'No recent activity found.')
+          with open('README.md', 'r') as f:
+              content = f.read()
           
-      - name: Commit changes
+          start_tag = '<!-- [START_REPO_LIST] -->'
+          end_tag = '<!-- [END_REPO_LIST] -->'
+          
+          start_idx = content.find(start_tag) + len(start_tag)
+          end_idx = content.find(end_tag)
+          
+          if start_idx != -1 and end_idx != -1:
+              new_content = content[:start_idx] + '\n' + repos + '\n' + content[end_idx:]
+              with open('README.md', 'w') as f:
+                  f.write(new_content)
+          "
+          
+      - name: Commit and Push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add README.md
-          git commit -m "Update recent projects list" || exit 0
+          git commit -m "Update recent projects list [skip ci]" || exit 0
           git push
