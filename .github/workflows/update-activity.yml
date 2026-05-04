@@ -16,29 +16,40 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
         run: |
-          # Fetch last 5 updated repositories (public and private) where you are the owner
-          # Removed the visibility flag to allow all types by default
-          REPOS=$(gh repo list --limit 5 --source --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
+          # Fetch raw JSON data (much more reliable than templates)
+          REPOS_JSON=$(gh repo list --limit 5 --source --json name,url,updatedAt)
           
-          echo "--- DEBUG: Repositories Found ---"
-          echo "$REPOS"
-          echo "---------------------------------"
-
-          # Export to environment for Python
-          echo "REPOS<<EOF" >> $GITHUB_ENV
-          echo "$REPOS" >> $GITHUB_ENV
+          # Export the raw JSON to the environment
+          echo "REPOS_JSON<<EOF" >> $GITHUB_ENV
+          echo "$REPOS_JSON" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       - name: Update README.md File
         run: |
           python3 -c "
-          import os
+          import os, json
+          from datetime import datetime
+
+          # 1. Load the JSON data
+          repos_json = os.getenv('REPOS_JSON', '[]')
+          repos_data = json.loads(repos_json)
           
-          # Retrieve repos from environment
-          repos_text = os.getenv('REPOS', '').strip()
-          if not repos_text:
+          if not repos_data:
               repos_text = '*No recent repository activity found.*'
+          else:
+              formatted_list = []
+              for repo in repos_data:
+                  # Convert '2026-05-04T02:58:14Z' to 'May 04, 2026'
+                  dt = datetime.strptime(repo['updatedAt'], '%Y-%m-%dT%H:%M:%SZ')
+                  clean_date = dt.strftime('%b %d, %Y')
+                  
+                  # Create a clean Markdown link with the date
+                  line = f'* [{repo['name']}]({repo['url']}) - _Updated {clean_date}_'
+                  formatted_list.append(line)
+              
+              repos_text = '\n'.join(formatted_list)
           
+          # 2. Update the README file
           with open('README.md', 'r', encoding='utf-8') as f:
               content = f.read()
           
@@ -49,19 +60,14 @@ jobs:
           end_idx = content.find(end_tag)
           
           if start_idx != -1 and end_idx != -1:
-              # Calculate insertion points
-              insertion_start = start_idx + len(start_tag)
               new_content = (
-                  content[:insertion_start] + 
+                  content[:start_idx + len(start_tag)] + 
                   '\n' + repos_text + '\n' + 
                   content[end_idx:]
               )
-              
               with open('README.md', 'w', encoding='utf-8') as f:
                   f.write(new_content)
-              print('README updated successfully.')
-          else:
-              print('Error: Could not find tags in README.md')
+              print('README updated with beautiful formatting!')
           "
 
       - name: Commit and Push Changes
