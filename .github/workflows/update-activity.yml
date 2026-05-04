@@ -8,9 +8,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: gautamkrishnar/user-repository-list@master
-        with:
-          token: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
-          type: owner
-          limit: 5
-          sort: updated
+      - name: Get Recent Repos
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
+        run: |
+          # Use GitHub CLI to get the last 5 updated repos (public and private)
+          REPOS=$(gh repo list --limit 5 --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
+          
+          # Use sed to inject the list between your anchors
+          sed -i '/<!-- \[START_REPO_LIST\] -->/,/<!-- \[END_REPO_LIST\] -->/{ /<!-- \[START_REPO_LIST\] -->/!{ /<!-- \[END_REPO_LIST\] -->/!d; }; /<!-- \[START_REPO_LIST\] -->/a '"$REPOS"'' README.md
+          
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git commit -m "Update recent projects list" || exit 0
+          git push
