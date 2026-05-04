@@ -1,44 +1,74 @@
 name: Update Repo List
+
 on:
   schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
+    - cron: '0 * * * *' # Runs every hour
+  workflow_dispatch: # Allows manual trigger for testing
+
 jobs:
   update-readme:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Update README with Repo List
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Fetch Recent Repositories
         env:
           GH_TOKEN: ${{ secrets.GH_PAT_TRACK_ACTIVITIES }}
         run: |
-          # 1. Fetch the data using GitHub CLI
-          REPOS=$(gh repo list --limit 5 --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
+          # Fetch last 5 updated repositories (including private) where you are the owner
+          REPOS=$(gh repo list --limit 5 --source --visibility private,public --json name,url,updatedAt --template '{{range .}}* [{{.name}}]({{.url}}) - _Updated {{.updatedAt}}_\n{{end}}')
           
-          # 2. Use Python to safely swap the content between the tags
+          # Print to logs for debugging
+          echo "--- DEBUG: Repositories Found ---"
+          echo "$REPOS"
+          echo "---------------------------------"
+
+          # Export to environment for Python
+          echo "REPOS<<EOF" >> $GITHUB_ENV
+          echo "$REPOS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Update README.md File
+        run: |
           python3 -c "
           import os
-          repos = os.getenv('REPOS', 'No recent activity found.')
-          with open('README.md', 'r') as f:
+          
+          # Retrieve repos from environment
+          repos_text = os.getenv('REPOS', '').strip()
+          if not repos_text:
+              repos_text = '*No recent repository activity found.*'
+          
+          with open('README.md', 'r', encoding='utf-8') as f:
               content = f.read()
           
           start_tag = '<!-- [START_REPO_LIST] -->'
           end_tag = '<!-- [END_REPO_LIST] -->'
           
-          start_idx = content.find(start_tag) + len(start_tag)
+          start_idx = content.find(start_tag)
           end_idx = content.find(end_tag)
           
           if start_idx != -1 and end_idx != -1:
-              new_content = content[:start_idx] + '\n' + repos + '\n' + content[end_idx:]
-              with open('README.md', 'w') as f:
+              # Calculate insertion points
+              insertion_start = start_idx + len(start_tag)
+              new_content = (
+                  content[:insertion_start] + 
+                  '\n' + repos_text + '\n' + 
+                  content[end_idx:]
+              )
+              
+              with open('README.md', 'w', encoding='utf-8') as f:
                   f.write(new_content)
+              print('README updated successfully.')
+          else:
+              print('Error: Could not find tags in README.md')
           "
-          
-      - name: Commit and Push
+
+      - name: Commit and Push Changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add README.md
-          git commit -m "Update recent projects list [skip ci]" || exit 0
+          # Only commit if there are changes; avoid failing if nothing changed
+          git commit -m "docs: update recent projects list [skip ci]" || exit 0
           git push
